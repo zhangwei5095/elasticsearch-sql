@@ -1,22 +1,17 @@
 package org.elasticsearch.plugin.nlpcn;
 
-import org.elasticsearch.action.ActionRequest;
-import org.elasticsearch.action.ActionRequestBuilder;
-import org.elasticsearch.action.search.SearchRequest;
-import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.inject.Inject;
-import org.elasticsearch.common.io.stream.BytesStreamOutput;
-import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.plugin.nlpcn.executors.ActionRequestRestExecuterFactory;
+import org.elasticsearch.plugin.nlpcn.executors.RestExecutor;
 import org.elasticsearch.rest.*;
-import org.elasticsearch.rest.action.support.RestBuilderListener;
-import org.elasticsearch.rest.action.support.RestStatusToXContentListener;
 import org.nlpcn.es4sql.SearchDao;
-import org.nlpcn.es4sql.query.explain.ExplainManager;
+import org.nlpcn.es4sql.query.QueryAction;
+import org.nlpcn.es4sql.query.SqlElasticRequestBuilder;
 
-import java.io.FileOutputStream;
+import java.util.Map;
+
 
 public class RestSqlAction extends BaseRestHandler {
 
@@ -31,24 +26,23 @@ public class RestSqlAction extends BaseRestHandler {
 
 	@Override
 	protected void handleRequest(RestRequest request, RestChannel channel, final Client client) throws Exception {
-
 		String sql = request.param("sql");
 
 		if (sql == null) {
 			sql = request.content().toUtf8();
 		}
-
 		SearchDao searchDao = new SearchDao(client);
-		ActionRequestBuilder actionRequestBuilder = searchDao.explain(sql);
-		ActionRequest actionRequest = actionRequestBuilder.request();
+        QueryAction queryAction= searchDao.explain(sql);
 
 		// TODO add unittests to explain. (rest level?)
 		if (request.path().endsWith("/_explain")) {
-			String jsonExplanation = ExplainManager.explain(actionRequestBuilder);
+			String jsonExplanation = queryAction.explain().explain();
 			BytesRestResponse bytesRestResponse = new BytesRestResponse(RestStatus.OK, jsonExplanation);
 			channel.sendResponse(bytesRestResponse);
 		} else {
-			new ActionRequestExecuter(actionRequest, channel, client).execute();
+            Map<String, String> params = request.params();
+            RestExecutor restExecutor = ActionRequestRestExecuterFactory.createExecutor(params.get("format"));
+			restExecutor.execute(client,params,queryAction,channel);
 		}
 	}
 }

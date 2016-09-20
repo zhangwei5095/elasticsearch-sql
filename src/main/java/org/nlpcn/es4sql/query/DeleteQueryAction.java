@@ -1,17 +1,19 @@
 package org.nlpcn.es4sql.query;
 
-
+import org.elasticsearch.action.deletebyquery.DeleteByQueryAction;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.plugin.deletebyquery.*;
 import org.elasticsearch.action.deletebyquery.DeleteByQueryRequestBuilder;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.index.query.BoolFilterBuilder;
+
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.nlpcn.es4sql.domain.Delete;
 import org.nlpcn.es4sql.domain.Select;
 import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
-import org.nlpcn.es4sql.query.maker.FilterMaker;
+
 import org.nlpcn.es4sql.query.maker.QueryMaker;
 
 public class DeleteQueryAction extends QueryAction {
@@ -25,13 +27,13 @@ public class DeleteQueryAction extends QueryAction {
 	}
 
 	@Override
-	public DeleteByQueryRequestBuilder explain() throws SqlParseException {
-		this.request = client.prepareDeleteByQuery();
-		request.setListenerThreaded(false);
+	public SqlElasticDeleteByQueryRequestBuilder explain() throws SqlParseException {
+		this.request = new DeleteByQueryRequestBuilder(client, DeleteByQueryAction.INSTANCE);
 
 		setIndicesAndTypes();
 		setWhere(delete.getWhere());
-		return request;
+        SqlElasticDeleteByQueryRequestBuilder deleteByQueryRequestBuilder = new SqlElasticDeleteByQueryRequestBuilder(request);
+		return deleteByQueryRequestBuilder;
 	}
 
 
@@ -57,8 +59,8 @@ public class DeleteQueryAction extends QueryAction {
 	 */
 	private void setWhere(Where where) throws SqlParseException {
 		if (where != null) {
-			BoolFilterBuilder boolFilter = FilterMaker.explan(where);
-			request.setQuery(QueryBuilders.filteredQuery(null, boolFilter));
+			QueryBuilder whereQuery = QueryMaker.explan(where);
+			request.setQuery(whereQuery);
 		} else {
 			request.setQuery(QueryBuilders.matchAllQuery());
 		}

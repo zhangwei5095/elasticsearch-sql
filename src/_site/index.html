@@ -10,9 +10,10 @@
     <title>Elasticsearch-sql client</title>
 
     <!-- Bootstrap core CSS -->
-    <link href="vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/bootstrap/css/bootstrap.min.css">
     <link href="style.css" rel="stylesheet">
-
+    <link rel="stylesheet" type="text/css" href="vendor/dataTables/css/jquery.dataTables.min.css"/>
+ 
   </head>
 
   <body ng-app="elasticsearchSqlApp" ng-controller="MainController">
@@ -26,16 +27,23 @@
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
-            
+
+            <li ng-cloak>
+              <a>{{version ? 'Version: ' + version : ''}}</a>
+            </li>
+
+            <li>
+              <form class="navbar-form">
+                <input type="text" id="urlBox" class="form-control" ng-model="url" />
+              </form>
+            </li>
+
             <li id="help_btn" data-toggle="modal" data-target="#help_popup">
               <a title="Help" href="#" data-placement="bottom">Help</a>
             </li>
 
           </ul>
 
-          <form class="navbar-form navbar-right">
-            <input type="text" id="urlBox" class="form-control" ng-model="url" />
-          </form>
         </div>
       </div>
     </nav>
@@ -57,6 +65,7 @@
             Write your SQL query and run it against elasticsearch. The results will be displayed in the table. You can use autocomple to write
             your queries easier.
           </p>
+          <p> Enter our <a href="https://github.com/NLPchina/elasticsearch-sql/wiki">Wiki</a> for more Information on how to query </p>
 
           <div class="keyboardSection">
             <h4>Keyboard tips</h4>
@@ -95,17 +104,84 @@
 
     <div class="container-fluid">
       <div class="row">
-        <div class="col-sm-9 col-sm-offset-3 col-md-11 col-md-offset-1 main">
+        <div class="col-sm-4 col-md-2 result_options panel-group" id="accordion">
+        <h3>Options <button class="btn btn-link" ng-click="saveConfigToStorage()"><span class="glyphicon glyphicon-floppy-disk"></span></button></h3>
+         <div class="panel panel-default">
+      <div class="panel-heading">
+        <h4 class="panel-title">
+             <a class="accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseOne">
+          Show Settings </span>
+        </a>
+        </h4>
+        </div>
+        <div id="collapseOne" class="panel-collapse collapse">
+      <div class="panel-body">
+         <div class="checkbox">
+            <label><input type="checkbox" ng-model="config.isFlat" value="">Flat Results</label>
+          </div>
+          <div class="checkbox">
+            <label><input type="checkbox" ng-model="config.useOldTable" ng-change="onChangeTablePresnterType()" value="">Old Table</label>
+          </div>
+          <div class="checkbox">
+            <label><input type="checkbox" ng-model="config.showScore" ng-change="onChangeTablePresnterType()" value="">Show Score</label>
+          </div>
+          <div class="checkbox">
+            <label><input type="checkbox" ng-model="config.showType" ng-change="onChangeTablePresnterType()" value="">Show Type</label>
+          </div>
+          <div class="checkbox">
+            <label><input type="checkbox" ng-model="config.alwaysScroll" ng-change="alwatsScrollChanged()" value="">always scroll</label>
+          </div>
+          <div class="">
+            <label class="scrollSizeLable">scroll per shard<input type="text" class="scrollSize" name="scrollSizeText" ng-model="config.scrollSize" maxlength="5" value="10" /></label>
+          </div>
+      </div>
+    </div>
+    </div>
+    <div class="panel panel-default">
+    <div class="panel-heading">
+        <h4 class="panel-title">
+             <a class="accordion-toggle" data-toggle="collapse" data-parent="#accordion" href="#collapseTwo">
+          Download Settings
+        </a>
+        </h4>
+        </div>
+        <div id="collapseTwo" class="panel-collapse collapse">
+      <div class="panel-body">
+                      <div class="checkbox">
+            <label><input type="checkbox" ng-model="config.isAutoSave" value="">AutoExportCSV</label>
+          </div>
+          
+          <div class="">
+            <label class="delimiterLable" >delimiter<input type="text" class="delimiter" name="delimiterText" ng-model="config.delimiter" maxlength="1" value="," /></label>
+          </div>
+      </div>
+    </div>
+    </div>
+
+
+    </div>
+
+            
+      
+        <div class="col-sm-8 col-md-10 main">
           <h1 class="page-header">SQL Query</h1>
 
           <!-- Query area -->
           <div class="search-area">
-          	<textarea id="queryTextarea">SELECT * FROM myindex</textarea> 
+          	<textarea id="queryTextarea">SELECT * FROM myindex</textarea>
   	        <button type="button" ng-click="search()" id="searchButton" class="btn btn-success search-button" ng-bind-html="getButtonContent(searchLoading,'Search')" ng-cloak>
             </button>
 
             <button type="button" ng-click="explain()" id="explainButton" class="btn btn-info explain-button" ng-bind-html="getButtonContent(explainLoading,'Explain')" ng-cloak>
             </button>
+
+            
+            <button type="button" ng-click="exportCSV()" id="exportCSV" class="btn btn-primary " ng-cloak>Export CSV <span class="glyphicon glyphicon-share"></span></button>
+            <button type="next" ng-click="nextSearch()" id="nextButton" class="btn btn-warning next-button" ng-disabled="!gotNext" ng-bind-html="getButtonContent(nextLoading,'<span class=\'glyphicon rotate-glyph glyphicon-step-forward\'></span>')" ng-cloak> 
+            </button>
+            <button type="fetchAll" ng-click="fetchAll()" id="fetchAllButton" class="btn btn-warning next-button" ng-disabled="!gotNext" ng-bind-html="getButtonContent(fetchAllLoading ,'<span class=\'glyphicon rotate-glyph glyphicon-fast-forward\'></span>')" ng-cloak> 
+            </button>
+
   	      </div>
 
           <!-- Error box, displayed only on errors -->
@@ -116,14 +192,14 @@
           </div>
 
           <!-- Results area, displayed after search -->
-          <div class="fadein" ng-show="resultsColumns.length > 0" ng-cloak>
+          <div class="fadein" ng-show="resultsColumns.length > 0 || showResults" ng-cloak>
           	<div>
-            	<h2 class="sub-header">Results</h2>             		
+            	<h2 class="sub-header">Results ({{amountDescription}})</h2>             		
          		</div>
 
-            <div class="table-responsive">
+            <div class="table-responsive" id ="searchResultZone">
               <table class="table table-striped" id="searchResult">
-                <thead>
+                <!-- <thead>
                   <tr id="tableHead">
                     <th ng-repeat="column in resultsColumns">{{column}}</th>
                   </tr>
@@ -134,11 +210,11 @@
                       {{row[column]}}
                     </td>
                   </tr>
-                </tbody>
+                </tbody> -->
               </table>
             </div>
 
-            <button type="button" ng-click="exportCSV()" id="exportCSV" class="btn btn-primary btn-sm" ng-cloak>Export CSV <span class="glyphicon glyphicon-share"></span></button>
+          
           </div>
 
           <!-- explan area , displayed after explan -->
@@ -157,10 +233,12 @@
 
 
     <!-- Jquery include -->
-    <script src="vendor/jquery/jquery-2.1.1.min.js"></script>
+  <script src="vendor/jquery/jquery-2.1.4.min.js"></script>
+  <script src="vendor/bootstrap/js/bootstrap.min.js"></script>
+    
 
     <!-- Bootstrap core JavaScript -->
-    <script src="vendor/bootstrap/js/bootstrap.min.js"></script>
+    <script src="vendor/dataTables/js/jquery.dataTables.min.js"></script>
 
     <!-- CodeMirror includes -->
   	<script src="vendor/codemirror/lib/codemirror.js"></script>
@@ -172,11 +250,16 @@
   	<script src="vendor/codemirror/addon/hint/sql-hint.js"></script>
 
     <!-- AngularJS -->
+    <script src="vendor/download/download.min.js"></script>
     <script src="vendor/angularjs/angular.min.js"></script>
     <script src="vendor/angularjs/angular-animate.min.js"></script>
     <script src="vendor/angularjs/angular-sanitize.min.js"></script>
+    
 
+    <script src="table_presenter.js"></script>  
     <script src="editor.js"></script>
+    <script src="mapping_parser.js"></script>
+
     <script src="query.js"></script>
     <script src="controllers.js"></script>
 
